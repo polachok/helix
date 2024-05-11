@@ -445,6 +445,10 @@ impl Tree {
         Traverse::new(self)
     }
 
+    pub fn traverse_containers(&self) -> TraverseContainers {
+        TraverseContainers::new(self)
+    }
+
     // Finds the split in the given direction if it exists
     pub fn find_split_in_direction(&self, id: ViewId, direction: Direction) -> Option<ViewId> {
         let parent = self.nodes[id].parent;
@@ -668,6 +672,61 @@ impl Tree {
 
     pub fn area(&self) -> Rect {
         self.area
+    }
+}
+
+pub enum ContainerItem {
+    Container {
+        id: ViewId,
+        parent: ViewId,
+        layout: Layout,
+    },
+    Child {
+        id: ViewId,
+        parent: ViewId,
+    },
+}
+
+#[derive(Debug)]
+pub struct TraverseContainers<'a> {
+    tree: &'a Tree,
+    stack: Vec<ViewId>, // TODO: reuse the one we use on update
+}
+
+impl<'a> TraverseContainers<'a> {
+    fn new(tree: &'a Tree) -> Self {
+        Self {
+            tree,
+            stack: vec![tree.root],
+        }
+    }
+}
+
+impl<'a> Iterator for TraverseContainers<'a> {
+    type Item = ContainerItem;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let key = self.stack.pop()?;
+            let node = &self.tree.nodes[key];
+
+            match &node.content {
+                Content::View(_) => {
+                    return Some(ContainerItem::Child {
+                        parent: node.parent,
+                        id: key,
+                    });
+                }
+                Content::Container(container) => {
+                    self.stack.extend(container.children.iter().rev());
+                    return Some(ContainerItem::Container {
+                        id: key,
+                        parent: node.parent,
+                        layout: container.layout,
+                    });
+                }
+            }
+        }
     }
 }
 
